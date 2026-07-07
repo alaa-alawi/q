@@ -42,7 +42,7 @@ Usage:
 
 ```bash
 export OPENAI_API_KEY='your_api_key'
-./q find which process is using port 8080
+./q --repl
 ```
 
 For local OpenAI-compatible servers that do not require auth, leave `OPENAI_API_KEY` unset.
@@ -51,74 +51,93 @@ If `LLM_SERVER` is unset or empty, `q` uses `127.0.0.1`.
 If `LLM_PORT` is unset or empty, `q` uses `8080`.
 The default endpoint is `http://127.0.0.1:8080/v1/responses`.
 
-Examples:
+Primary use is the unified shell/LLM REPL. Commands run as commands and questions go to the LLM:
+
+```text
+1 $        ss -tulpn
+2 $        find which process is using port 8080
+3 $        journalctl -u nginx -n 100 --no-pager
+4 $        why is ssh login slow on Ubuntu?
+```
+
+Typical REPL prompts for day-to-day sysadmin work:
+
+```text
+show the last 100 nginx service logs without paging
+```
+
+```text
+restart nginx and verify it is listening on ports 80 and 443
+```
+
+```text
+list failed systemd units and show commands to inspect each failure
+```
+
+```text
+show disk usage by top-level directories under /var
+```
+
+```text
+find files larger than 1G under /home modified in the last 7 days
+```
+
+```text
+check apt package holds and pending security upgrades
+```
+
+```text
+explain how to safely remove old kernels on Linux Mint
+```
+
+```text
+create a systemd timer that runs /usr/local/bin/backup.sh daily at 02:30
+```
+
+```text
+write an rsync command to mirror /srv/data to backup@example:/backups/data preserving permissions and deleting removed files
+```
+
+```text
+show ufw commands to allow ssh, http, and https then enable the firewall
+```
+
+```text
+diagnose DNS resolution problems using resolvectl, dig, and systemd-resolved logs
+```
+
+```text
+show commands to list users with sudo access
+```
+
+```text
+generate a logrotate config for /var/log/myapp/*.log keeping 14 compressed daily logs
+```
+
+```text
+check memory pressure and swap usage from the command line
+```
+
+```text
+show commands to inspect SMART health for /dev/sda
+```
+
+Use `?` when the first word overlaps with a real command and you want the LLM:
+
+```text
+? top processes by memory with ps, sorted descending
+```
+
+Use `!` to force shell execution:
+
+```text
+! which bash
+```
+
+One-shot mode is also available when you do not want to enter the REPL:
 
 ```bash
 ./q find which process is using port 8080
-```
-
-```bash
-./q show the last 100 nginx service logs without paging
-```
-
-```bash
-./q restart nginx and verify it is listening on ports 80 and 443
-```
-
-```bash
-./q check why ssh login is slow on Ubuntu
-```
-
-```bash
-./q list failed systemd units and show commands to inspect each failure
-```
-
-```bash
-./q show disk usage by top-level directories under /var
-```
-
-```bash
-./q find files larger than 1G under /home modified in the last 7 days
-```
-
-```bash
-./q check apt package holds and pending security upgrades
-```
-
-```bash
-./q explain how to safely remove old kernels on Linux Mint
-```
-
-```bash
-./q create a systemd timer that runs /usr/local/bin/backup.sh daily at 02:30
-```
-
-```bash
-./q write an rsync command to mirror /srv/data to backup@example:/backups/data preserving permissions and deleting removed files
-```
-
-```bash
-./q show ufw commands to allow ssh, http, and https then enable the firewall
-```
-
-```bash
-./q diagnose DNS resolution problems using resolvectl, dig, and systemd-resolved logs
-```
-
-```bash
-./q show commands to list users with sudo access
-```
-
-```bash
-./q generate a logrotate config for /var/log/myapp/*.log keeping 14 compressed daily logs
-```
-
-```bash
-./q check memory pressure and swap usage from the command line
-```
-
-```bash
-./q show commands to inspect SMART health for /dev/sda
 ```
 
 ```bash
@@ -166,13 +185,7 @@ Modes are `none`, `query`, `response`, `both`, or an appendable file path. Defau
 By default, streamed reasoning/thinking output is hidden and shown as animated dots on stderr. To show it:
 
 ```bash
-./q --think-loud find which process is using port 8080
-```
-
-Unified shell/LLM loop:
-
-```bash
-./q --repl
+./q --repl --think-loud
 ```
 
 In REPL mode, if the first word is a shell builtin/reserved word or an executable in `PATH`, `q` runs the line as a shell command. Otherwise, it sends the full line to the LLM.
