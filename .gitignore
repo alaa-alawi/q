@@ -1,0 +1,9 @@
+q
+*.o
+*~
+__pycache__/
+*.pyc
+.mypy_cache/
+*.fasl
+.q_context.jsonl
+scratch/
