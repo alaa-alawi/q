@@ -54,6 +54,74 @@ The default endpoint is `http://127.0.0.1:8080/v1/responses`.
 Examples:
 
 ```bash
+./q find which process is using port 8080
+```
+
+```bash
+./q show the last 100 nginx service logs without paging
+```
+
+```bash
+./q restart nginx and verify it is listening on ports 80 and 443
+```
+
+```bash
+./q check why ssh login is slow on Ubuntu
+```
+
+```bash
+./q list failed systemd units and show commands to inspect each failure
+```
+
+```bash
+./q show disk usage by top-level directories under /var
+```
+
+```bash
+./q find files larger than 1G under /home modified in the last 7 days
+```
+
+```bash
+./q check apt package holds and pending security upgrades
+```
+
+```bash
+./q explain how to safely remove old kernels on Linux Mint
+```
+
+```bash
+./q create a systemd timer that runs /usr/local/bin/backup.sh daily at 02:30
+```
+
+```bash
+./q write an rsync command to mirror /srv/data to backup@example:/backups/data preserving permissions and deleting removed files
+```
+
+```bash
+./q show ufw commands to allow ssh, http, and https then enable the firewall
+```
+
+```bash
+./q diagnose DNS resolution problems using resolvectl, dig, and systemd-resolved logs
+```
+
+```bash
+./q show commands to list users with sudo access
+```
+
+```bash
+./q generate a logrotate config for /var/log/myapp/*.log keeping 14 compressed daily logs
+```
+
+```bash
+./q check memory pressure and swap usage from the command line
+```
+
+```bash
+./q show commands to inspect SMART health for /dev/sda
+```
+
+```bash
 LLM_SERVER=127.0.0.1:8000 ./q check nginx logs last 50 lines
 ```
 
