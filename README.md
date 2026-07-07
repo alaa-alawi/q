@@ -1,10 +1,73 @@
-# LLMinTerminal
+# LLM interleaved with Terminal
 
-Small C CLI named `q` that sends all command-line arguments as one `input1` string to a local OpenAI-compatible Responses API using a Linux sysadmin system prompt. Responses are streamed to stdout as they arrive.
+A proof of concept of interleaving the terminal/shell with the LLM. so you can do day to day shell commands and if stuck or want more clarification, in the same prompt the users post their question to the LLM, and get answers there, thus no need to hop to the browser. kind of nearby senior who can help clarify or provide examples for what you are trying to do. Examples (after launching it in repl mode with q --repl )
 
-With `--color`, LLM response text is dark blue. In terminal emulators, fenced code blocks are white on a gray background; on Linux virtual TTYs (`TERM=linux`), fenced code blocks are white. Piped output remains plain.
+$ q --repl --color
 
-While waiting for the first response bytes from the server, `q` shows animated dots.
+```text
+1 $ show the last 100 nginx service logs without paging
+```
+
+```text
+2 $ restart nginx and verify it is listening on ports 80 and 443
+```
+
+```text
+3 $ list failed systemd units and show commands to inspect each failure
+```
+
+```text
+4 $ show disk usage by top-level directories under /var
+```
+
+```text
+5 $ find files larger than 1G under /home modified in the last 7 days
+```
+
+```text
+6 $ check apt package holds and pending security upgrades
+```
+
+```text
+7 $ create a systemd timer that runs /usr/local/bin/backup.sh daily at 02:30
+```
+
+```text
+8 $ write an rsync command to mirror /srv/data to backup@example:/backups/data preserving permissions and deleting removed files
+```
+
+```text
+9 $ ? top processes by memory with ps, sorted descending
+```
+
+and many others like:
+
+```text
+show ufw commands to allow ssh, http, and https then enable the firewall
+diagnose DNS resolution problems using resolvectl, dig, and systemd-resolved logs
+show commands to list users with sudo access
+generate a logrotate config for /var/log/myapp/*.log keeping 14 compressed daily logs
+check memory pressure and swap usage from the command line
+show commands to inspect SMART health for /dev/sda
+```
+
+Hope you got the drift. It is rough and rather large with ~7k of vibed code, and I had been using it as a daily driver.
+
+Note that the output of queries will depend on the LLM used.
+
+Sometimes q will be confused with a query for a command (i.e. who or which), usually this can be workaround by Capitalizing the first word of a query.
+
+Still you can use ! to force a shell execution or ? to force a query.
+
+If an LLM was asked for a shell/bash/zsh examples and these were fenced, then these are detected and are numbered from 1 to the last one. you can then type the number followed by dot (i.e. 2.) which will execute it without typing it.
+
+for help use slash command /help which will show other commands.
+
+In summary q is a small vibed (using codex) C CLI named `q` that sends all command-line arguments as one `input1` string to a local OpenAI-compatible Responses API using a Linux sysadmin system prompt. Responses are streamed to stdout as they arrive.
+
+Note that again, this is a proof of concept rather than finished work, and waiting until it is ready will take forever, thus opting to publish the code so other smarter people can have fun and run with it.
+
+Below is the start of LLM generated content
 
 ## Build
 
@@ -51,90 +114,7 @@ If `LLM_SERVER` is unset or empty, `q` uses `127.0.0.1`.
 If `LLM_PORT` is unset or empty, `q` uses `8080`.
 The default endpoint is `http://127.0.0.1:8080/v1/responses`.
 
-Primary use is the unified shell/LLM REPL. Commands run as commands and questions go to the LLM:
-
-```text
-1 $        ss -tulpn
-2 $        find which process is using port 8080
-3 $        journalctl -u nginx -n 100 --no-pager
-4 $        why is ssh login slow on Ubuntu?
-```
-
-Typical REPL prompts for day-to-day sysadmin work:
-
-```text
-show the last 100 nginx service logs without paging
-```
-
-```text
-restart nginx and verify it is listening on ports 80 and 443
-```
-
-```text
-list failed systemd units and show commands to inspect each failure
-```
-
-```text
-show disk usage by top-level directories under /var
-```
-
-```text
-find files larger than 1G under /home modified in the last 7 days
-```
-
-```text
-check apt package holds and pending security upgrades
-```
-
-```text
-explain how to safely remove old kernels on Linux Mint
-```
-
-```text
-create a systemd timer that runs /usr/local/bin/backup.sh daily at 02:30
-```
-
-```text
-write an rsync command to mirror /srv/data to backup@example:/backups/data preserving permissions and deleting removed files
-```
-
-```text
-show ufw commands to allow ssh, http, and https then enable the firewall
-```
-
-```text
-diagnose DNS resolution problems using resolvectl, dig, and systemd-resolved logs
-```
-
-```text
-show commands to list users with sudo access
-```
-
-```text
-generate a logrotate config for /var/log/myapp/*.log keeping 14 compressed daily logs
-```
-
-```text
-check memory pressure and swap usage from the command line
-```
-
-```text
-show commands to inspect SMART health for /dev/sda
-```
-
-Use `?` when the first word overlaps with a real command and you want the LLM:
-
-```text
-? top processes by memory with ps, sorted descending
-```
-
-Use `!` to force shell execution:
-
-```text
-! which bash
-```
-
-One-shot mode is also available when you do not want to enter the REPL:
+Also One-shot mode is also available when you do not want to enter the REPL:
 
 ```bash
 ./q find which process is using port 8080
@@ -187,8 +167,6 @@ By default, streamed reasoning/thinking output is hidden and shown as animated d
 ```bash
 ./q --repl --think-loud
 ```
-
-In REPL mode, if the first word is a shell builtin/reserved word or an executable in `PATH`, `q` runs the line as a shell command. Otherwise, it sends the full line to the LLM.
 
 REPL slash commands include `/help`, `/keys`, `/show-system-prompt`, `/set-system-prompt path`, `/llm-timeout seconds`, `/llm-turn-limit count`, `/think-loud on|off`, `/api-logging none|query|response|both|path`, `/add-mcp-server url`, `/remove-mcp-server name`, `/list-mcp-servers`, `/truncate-context`, `/clear-completion-cache`, `/note text`, and `/exit`.
 
