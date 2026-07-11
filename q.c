@@ -192,6 +192,7 @@ static volatile sig_atomic_t request_interrupt_signal = 0;
 static struct termios saved_termios;
 static int saved_termios_valid = 0;
 static int terminal_raw_active = 0;
+static int terminal_cursor_hidden = 0;
 static long llm_timeout_seconds = DEFAULT_LLM_TIMEOUT;
 static long llm_turn_limit = DEFAULT_LLM_TURN_LIMIT;
 static char *api_logging_path = NULL;
@@ -214,7 +215,24 @@ static void print_llm_timeout_value(FILE *out, long value);
 static char *shell_quote_word(const char *s);
 static int clipboard_available(void);
 
+static void hide_terminal_cursor(void) {
+    if (!terminal_cursor_hidden) {
+        fputs("\033[?25l", stderr);
+        fflush(stderr);
+        terminal_cursor_hidden = 1;
+    }
+}
+
+static void show_terminal_cursor(void) {
+    if (terminal_cursor_hidden) {
+        fputs("\033[?25h", stderr);
+        fflush(stderr);
+        terminal_cursor_hidden = 0;
+    }
+}
+
 static void restore_terminal_if_needed(void) {
+    show_terminal_cursor();
     if (terminal_raw_active && saved_termios_valid) {
         tcsetattr(STDIN_FILENO, TCSAFLUSH, &saved_termios);
         terminal_raw_active = 0;
@@ -5625,6 +5643,17 @@ static int completion_path_is_executable_file(const char *path, int d_type) {
     return access(path, X_OK) == 0;
 }
 
+static int completion_path_is_regular_file(const char *path, int d_type) {
+    if (d_type == DT_REG) {
+        return 1;
+    }
+    if (d_type != DT_UNKNOWN && d_type != DT_LNK) {
+        return 0;
+    }
+    struct stat st;
+    return stat(path, &st) == 0 && S_ISREG(st.st_mode);
+}
+
 static char *completion_expand_tilde_path(const char *path) {
     if (!path || path[0] != '~' || (path[1] != '/' && path[1] != '\0')) {
         return path ? strdup(path) : NULL;
@@ -5866,7 +5895,7 @@ static char **option_completion_matches_from_summary(const char *summary, const 
     return matches;
 }
 
-static char **cwd_completion_matches(const char *prefix) {
+static char **cwd_completion_matches(const char *prefix, int include_regular_files) {
     DIR *dp = opendir(".");
     if (!dp) {
         perror("opendir");
@@ -5886,7 +5915,9 @@ static char **cwd_completion_matches(const char *prefix) {
             continue;
         }
         int is_dir = completion_path_is_dir(ent->d_name, ent->d_type);
-        if (!is_dir) {
+        int is_regular_file = !is_dir && include_regular_files &&
+                              completion_path_is_regular_file(ent->d_name, ent->d_type);
+        if (!is_dir && !is_regular_file) {
             continue;
         }
         if (!add_completion_match(&items, &len, &cap, ent->d_name, is_dir)) {
@@ -5924,7 +5955,7 @@ static char **cwd_completion_matches(const char *prefix) {
 static char **path_completion_matches(const char *prefix, int include_regular_files) {
     const char *slash = strrchr(prefix, '/');
     if (!slash) {
-        return cwd_completion_matches(prefix);
+        return cwd_completion_matches(prefix, include_regular_files);
     }
 
     size_t dir_len = (size_t)(slash - prefix);
@@ -5999,7 +6030,7 @@ static char **path_completion_matches(const char *prefix, int include_regular_fi
         snprintf(real_name, real_name_len, "%s/%s", real_dir, ent->d_name);
         int is_dir = completion_path_is_dir(real_name, ent->d_type);
         int is_regular_file = !is_dir && include_regular_files &&
-                              (ent->d_type == DT_REG || ent->d_type == DT_UNKNOWN);
+                              completion_path_is_regular_file(real_name, ent->d_type);
         int is_exec_file = !is_dir && allow_executable_files && completion_path_is_executable_file(real_name, ent->d_type);
         free(real_name);
         if (!is_dir && !is_regular_file && !is_exec_file) {
@@ -6273,9 +6304,21 @@ static char **completion_matches_for_line(const char *line, size_t cursor, const
         return NULL;
     }
 
-    if (cursor == 0 || isspace((unsigned char)line[cursor - 1])) {
+    if (cursor == 0) {
         free(tok);
-        return cwd_completion_matches(NULL);
+        return NULL;
+    }
+
+    if (isspace((unsigned char)line[cursor - 1])) {
+        int has_command = 0;
+        for (size_t i = 0; i < cursor; i++) {
+            if (!isspace((unsigned char)line[i])) {
+                has_command = 1;
+                break;
+            }
+        }
+        free(tok);
+        return has_command ? cwd_completion_matches(NULL, 1) : NULL;
     }
 
     if (tok[0] == '/') {
@@ -6316,7 +6359,7 @@ static char **completion_matches_for_line(const char *line, size_t cursor, const
     }
 
     char **matches = token_is_first_word(line, cursor, tok) ?
-        command_completion_matches(tok, aliases) : cwd_completion_matches(tok);
+        command_completion_matches(tok, aliases) : cwd_completion_matches(tok, 1);
     free(tok);
     return matches;
 }
@@ -6457,6 +6500,12 @@ static void move_back_to_editor_cursor_row(int rows_below_cursor) {
     }
 }
 
+static void close_completion_menu(size_t rows, int rows_below_cursor) {
+    clear_completion_menu(rows);
+    move_back_to_editor_cursor_row(rows_below_cursor);
+    show_terminal_cursor();
+}
+
 static int handle_visual_completion(int line_no, struct buffer *buf, size_t *cursor, const struct shell_aliases *aliases) {
     if (!buf || buf->len == 0) {
         return 0;
@@ -6480,6 +6529,7 @@ static int handle_visual_completion(int line_no, struct buffer *buf, size_t *cur
         return 0;
     }
 
+    hide_terminal_cursor();
     int rows_below_cursor = move_below_editor_input(buf, *cursor, line_no);
     size_t selected = 0;
     size_t rows = render_completion_menu(matches, n, selected);
@@ -6487,14 +6537,12 @@ static int handle_visual_completion(int line_no, struct buffer *buf, size_t *cur
     while (1) {
         unsigned char c = 0;
         if (read(STDIN_FILENO, &c, 1) != 1) {
-            clear_completion_menu(rows);
-            move_back_to_editor_cursor_row(rows_below_cursor);
+            close_completion_menu(rows, rows_below_cursor);
             free_completion_matches(matches);
             return 0;
         }
         if (c == '\r' || c == '\n' || c == ' ') {
-            clear_completion_menu(rows);
-            move_back_to_editor_cursor_row(rows_below_cursor);
+            close_completion_menu(rows, rows_below_cursor);
             replace_completion_token(buf, cursor, matches[selected + 1]);
             free_completion_matches(matches);
             return 0;
@@ -6508,16 +6556,14 @@ static int handle_visual_completion(int line_no, struct buffer *buf, size_t *cur
                 struct timeval tv = {0, 10000};
                 int ready = select(STDIN_FILENO + 1, &rfds, NULL, NULL, &tv);
                 if (ready <= 0 || !FD_ISSET(STDIN_FILENO, &rfds) || read(STDIN_FILENO, &c2, 1) != 1) {
-                    clear_completion_menu(rows);
-                    move_back_to_editor_cursor_row(rows_below_cursor);
+                    close_completion_menu(rows, rows_below_cursor);
                     free_completion_matches(matches);
                     return 0;
                 }
                 if (c2 == '[') {
                     unsigned char c3 = 0;
                     if (read(STDIN_FILENO, &c3, 1) != 1) {
-                        clear_completion_menu(rows);
-                        move_back_to_editor_cursor_row(rows_below_cursor);
+                        close_completion_menu(rows, rows_below_cursor);
                         free_completion_matches(matches);
                         return 0;
                     }
@@ -6530,8 +6576,7 @@ static int handle_visual_completion(int line_no, struct buffer *buf, size_t *cur
                     } else if (c3 == 'D') {
                         selected = selected == 0 ? n - 1 : selected - 1;
                     } else {
-                        clear_completion_menu(rows);
-                        move_back_to_editor_cursor_row(rows_below_cursor);
+                        close_completion_menu(rows, rows_below_cursor);
                         free_completion_matches(matches);
                         return 0;
                     }
@@ -6540,8 +6585,7 @@ static int handle_visual_completion(int line_no, struct buffer *buf, size_t *cur
                     continue;
                 }
             }
-            clear_completion_menu(rows);
-            move_back_to_editor_cursor_row(rows_below_cursor);
+            close_completion_menu(rows, rows_below_cursor);
             free_completion_matches(matches);
             return 0;
         }
@@ -6550,8 +6594,7 @@ static int handle_visual_completion(int line_no, struct buffer *buf, size_t *cur
         } else if (c == 127 || c == 8) {
             selected = selected == 0 ? n - 1 : selected - 1;
         } else {
-            clear_completion_menu(rows);
-            move_back_to_editor_cursor_row(rows_below_cursor);
+            close_completion_menu(rows, rows_below_cursor);
             free_completion_matches(matches);
             if (isprint(c)) {
                 size_t old_len = buf->len;
